@@ -8,19 +8,77 @@ let emailOpens = [];
 
 // Main tracking endpoint
 app.get('/track.gif', (req, res) => {
-    const ip = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress;
+    // Function to get REAL client IP (not proxy IPs)
+    const getClientIp = (req) => {
+        // Try different headers in order (most to least reliable)
+        const headersToCheck = [
+            'x-real-ip',
+            'x-client-ip', 
+            'cf-connecting-ip',      // CloudFlare
+            'fastly-client-ip',      // Fastly CDN
+            'x-cluster-client-ip',
+            'x-forwarded', 
+            'forwarded-for',
+            'forwarded'
+        ];
+        
+        // First check standard headers
+        for (const header of headersToCheck) {
+            if (req.headers[header]) {
+                const ip = req.headers[header];
+                // Handle comma-separated lists (x-forwarded-for: client, proxy1, proxy2)
+                if (ip.includes(',')) {
+                    return ip.split(',')[0].trim();
+                }
+                return ip;
+            }
+        }
+        
+        // Check x-forwarded-for (common for proxies)
+        if (req.headers['x-forwarded-for']) {
+            const xForwardedFor = req.headers['x-forwarded-for'];
+            // Get the first IP in the chain (client IP)
+            const ips = xForwardedFor.split(',');
+            return ips[0].trim();
+        }
+        
+        // Try connection/socket IPs
+        if (req.connection && req.connection.remoteAddress) {
+            return req.connection.remoteAddress;
+        }
+        if (req.socket && req.socket.remoteAddress) {
+            return req.socket.remoteAddress;
+        }
+        if (req.connection && req.connection.socket && req.connection.socket.remoteAddress) {
+            return req.connection.socket.remoteAddress;
+        }
+        
+        // Fallback to req.ip (Express default)
+        return req.ip || 'unknown';
+    };
+    
+    // Get the IP
+    const ip = getClientIp(req);
     const userAgent = req.headers['user-agent'] || 'Unknown';
     const emailId = req.query.id || 'unknown';
     const recipient = req.query.to || 'unknown@example.com';
     
-    // Create log entry
+    // Extract additional useful info
+    const referer = req.headers['referer'] || 'Direct';
+    const acceptLanguage = req.headers['accept-language'] || 'Unknown';
+    const acceptEncoding = req.headers['accept-encoding'] || 'Unknown';
+    
+    // Create log entry with more details
     const logEntry = {
         id: Date.now(),
         emailId: emailId,
         recipient: recipient,
         ip: ip,
-        userAgent: userAgent.substring(0, 50), // First 50 chars
-        time: new Date().toLocaleString()
+        userAgent: userAgent.substring(0, 100), // First 100 chars
+        referer: referer,
+        language: acceptLanguage.split(',')[0], // Primary language
+        time: new Date().toLocaleString(),
+        timestamp: new Date().toISOString()
     };
     
     // Add to array (keep last 100 only)
@@ -29,21 +87,33 @@ app.get('/track.gif', (req, res) => {
         emailOpens = emailOpens.slice(0, 100);
     }
     
-    // Log to console (you'll see this in Render logs)
+    // Log to console with more details
     console.log('📧 EMAIL OPENED!');
-    console.log('Email ID:', emailId);
-    console.log('Recipient:', recipient);
-    console.log('IP Address:', ip);
-    console.log('Time:', logEntry.time);
+    console.log('📧 Email ID:', emailId);
+    console.log('👤 Recipient:', recipient);
+    console.log('📍 IP Address:', ip);
+    console.log('🌐 Referer:', referer);
+    console.log('🗣️ Language:', acceptLanguage.split(',')[0]);
+    console.log('🕒 Time:', logEntry.time);
+    console.log('🔧 User Agent:', userAgent.substring(0, 80) + '...');
+    
+    // Log all headers for debugging (optional)
+    console.log('📋 All Headers:', JSON.stringify(req.headers, null, 2));
     console.log('---');
     
     // Create 1x1 transparent GIF
     const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
     
+    // Set headers to prevent caching
     res.writeHead(200, {
         'Content-Type': 'image/gif',
         'Content-Length': gif.length,
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Access-Control-Allow-Origin': '*', // Allow cross-origin
+        'X-Tracking-ID': emailId, // Custom header for debugging
+        'X-Client-IP': ip // Echo back the IP for verification
     });
     
     res.end(gif);
@@ -373,17 +443,33 @@ app.listen(PORT, () => {
 });
 // Add this endpoint
 app.get('/redirect-pixel', (req, res) => {
-    const ip = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress;
+    // Get REAL client IP (not proxy IPs)
+    const getClientIp = (req) => {
+        // Try different headers in order
+        return req.headers['x-real-ip'] ||
+               req.headers['x-client-ip'] ||
+               req.headers['cf-connecting-ip'] ||  // CloudFlare
+               req.headers['fastly-client-ip'] ||
+               req.headers['x-cluster-client-ip'] ||
+               req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+               req.connection.remoteAddress ||
+               req.socket.remoteAddress ||
+               req.connection.socket?.remoteAddress ||
+               'unknown';
+    };
+    
+    const ip = getClientIp(req);
     const emailId = req.query.id || 'unknown';
     const recipient = req.query.to || 'unknown@example.com';
     
     console.log('🔄 REDIRECT PIXEL TRIGGERED!');
     console.log('Email ID:', emailId);
     console.log('Recipient:', recipient);
-    console.log('IP Address:', ip);
+    console.log('REAL IP Address:', ip);
+    console.log('All Headers:', JSON.stringify(req.headers, null, 2)); // Debug
     console.log('Time:', new Date().toLocaleString());
     console.log('---');
     
-    // Redirect to a REAL 1x1 pixel image (Google's transparent pixel)
+    // Redirect to Google's transparent pixel
     res.redirect('https://www.google.com/images/cleardot.gif');
 });
