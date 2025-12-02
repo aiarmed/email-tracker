@@ -379,5 +379,5 @@ app.get('/redirect-pixel', (req, res) => {
     console.log('📍 IP tracked:', ip, 'Email:', emailId);
     
     // Redirect to your Imgur pixel AFTER logging
-    res.redirect('https://imgur.com/vUEpZzR');
+    res.redirect('https://imgur.com/a/lol-cAbemc9');
 });
