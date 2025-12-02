@@ -371,3 +371,13 @@ app.listen(PORT, () => {
     console.log(`✅ Email tracker running on port ${PORT}`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dashboard`);
 });
+// Add this endpoint
+app.get('/redirect-pixel', (req, res) => {
+    const ip = req.ip;
+    const emailId = req.query.id || 'unknown';
+    
+    console.log('📍 IP tracked:', ip, 'Email:', emailId);
+    
+    // Redirect to your Imgur pixel AFTER logging
+    res.redirect('https://imgur.com/a/cAbemc9');
+});
