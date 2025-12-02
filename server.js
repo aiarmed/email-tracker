@@ -373,11 +373,17 @@ app.listen(PORT, () => {
 });
 // Add this endpoint
 app.get('/redirect-pixel', (req, res) => {
-    const ip = req.ip;
+    const ip = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress;
     const emailId = req.query.id || 'unknown';
+    const recipient = req.query.to || 'unknown@example.com';
     
-    console.log('📍 IP tracked:', ip, 'Email:', emailId);
+    console.log('🔄 REDIRECT PIXEL TRIGGERED!');
+    console.log('Email ID:', emailId);
+    console.log('Recipient:', recipient);
+    console.log('IP Address:', ip);
+    console.log('Time:', new Date().toLocaleString());
+    console.log('---');
     
-    // Redirect to your Imgur pixel AFTER logging
-    res.redirect('https://imgur.com/a/lol-cAbemc9');
+    // Redirect to a REAL 1x1 pixel image (Google's transparent pixel)
+    res.redirect('https://www.google.com/images/cleardot.gif');
 });
