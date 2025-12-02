@@ -9,14 +9,32 @@ let emailOpens = [];
 // Main tracking endpoint
 app.get('/track.gif', (req, res) => {
     const ip = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'] || 'Unknown';
     const emailId = req.query.id || 'unknown';
     const recipient = req.query.to || 'unknown@example.com';
     
-    console.log('📧 EMAIL OPENED/CLICKED!');
+    // Create log entry
+    const logEntry = {
+        id: Date.now(),
+        emailId: emailId,
+        recipient: recipient,
+        ip: ip,
+        userAgent: userAgent.substring(0, 50), // First 50 chars
+        time: new Date().toLocaleString()
+    };
+    
+    // Add to array (keep last 100 only)
+    emailOpens.unshift(logEntry);
+    if (emailOpens.length > 100) {
+        emailOpens = emailOpens.slice(0, 100);
+    }
+    
+    // Log to console (you'll see this in Render logs)
+    console.log('📧 EMAIL OPENED!');
     console.log('Email ID:', emailId);
     console.log('Recipient:', recipient);
     console.log('IP Address:', ip);
-    console.log('Time:', new Date().toLocaleString());
+    console.log('Time:', logEntry.time);
     console.log('---');
     
     // Create 1x1 transparent GIF
@@ -28,7 +46,7 @@ app.get('/track.gif', (req, res) => {
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
     });
     
-    res.end(gif); // JUST the pixel, nothing else
+    res.end(gif);
 });
 
 // Dashboard - View all tracking data
